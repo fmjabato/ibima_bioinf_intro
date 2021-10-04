@@ -1,0 +1,341 @@
+---
+title: "IBIMA - Clustering"
+author: "Fernando Moreno Jabato"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+set.seed(1234)
+# Load necessary packages
+
+# Set document options
+knitr::opts_chunk$set(echo = TRUE)
+
+# Define useful functions
+get_legend<-function(myggplot){
+  tmp <- ggplot2::ggplot_gtable(ggplot2::ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+```
+
+# **Introducción**
+Este documento ha sido creado para impartir docencia en el curso de bioinformática del Instituto de investigación Biomédica de Málaga (IBIMA) del 2021. En concreto, para el módulo de _Cálculo de comunidades_ (clustering).
+
+La exactitud de este documento está sujeta al momento de su creación y está orientado a un nivel de iniciación, hasta medio, sobre la materia. Además, la granuralidad de explicación de los conceptos se ha adecuado para impartir una clase de 1 hora.
+
+Este documento se genera con licencia [creative commons CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+Pueden contactar conmigo mediante el correo jabato@uma.es para cualquier duda sobre los conceptos explicados, así como intereses en indagar más en la materia y/o aplicaciones en problemas reales de su campo.
+
+# **El concepto**
+
+Lo primero es responder a la pregunta ¿qué es un algoritmo de _clustering_?
+
+Si nos vamos a la definición técnica encontraremos que son algoritmos que buscan ordenar y agrupar vectores de elementos en base a funciones de _distancia_ y estrategias de asociación.
+
+La forma en la que yo (el autor) mejor lo entiendo, es que voy a intentar juntar elementos, de manera que estén en el grupo donde se parecen más a los otros individuos.
+
+Muchas veces **se confunden** los algoritmos de cálculo de comunidades (clustering) con los algoritmos de clasificación (classifiers), muy comunos en _Machine Learning (ML)_. Estos últimos necesitan de una fase de _entrenamiento_ (ajuste), para luego poder clasificar nuevos individuos.
+
+Esta sería la idea a _grosso modo_, pero hay muchos matices que marcan cuál va a ser la mejor *estrategia* a seguir. 
+
+Antes de comenzar con los algoritmos en si, vamos a dar un repaso a estos detalles que te ayudarán a entender mejor qué algoritmo aplicar a tu problema.
+
+## **La característica**
+En este apartado vamos a centrarnos en las características de las que disponemos para definir el _perfil_ de cada individuo y compararlo con los otros.
+
+Tenemos que entender que todos los algoritmos van a utilizar una _función de distancia_ para transformar todos estas características que conforman un perfil y obtener un valor numérico de la comparación de dos perfiles.
+
+Es importante entender qué información vamos a usar y cómo para seleccionar la mejor función de distancia.
+
+Por ejemplo, aquí tenemos un set de datos que incluye diferentes individuos y características:
+
+```{r define_setA, echo = FALSE}
+sA_type <- c("Naranja","Zanahoria","Yuca","Patata","Perro","Zorro","Hamster")
+sA_color <- c("orange","orange","brown","yellow","yellow","orange","brown")
+sA_size <- c(1.1,1.2,2.1,2.2,3,1.9,0.9)
+sA_kingdom <- c(rep("Planta",4),rep("Animal",3))
+setA <- data.frame(Type = sA_type,
+                   Color = sA_color,
+                   Size = sA_size,
+                   Kingdom = sA_kingdom,
+                   stringsAsFactors = TRUE)
+DT::datatable(setA)
+```
+Si representamos este set de datos usando cada característica de forma individual podemos encontrar las siguientes distribuciones:
+```{r plot_setA, echo = FALSE}
+# Take plottable features
+#sA_features <- colnames(setA)
+#sA_features <- sA_features[-which(sA_features == "Type")]
+#sA_features_pairs <- expand.grid(sA_features,head(sA_features,-1), stringsAsFactors = FALSE)
+#sA_features_pairs <- sA_features_pairs[-which(sA_features_pairs[,1] == sA_features_pairs[,2]),] # Some will be repeated, clean it
+sA_features_pairs <- data.frame(X = c("Color","Color",   "Size"),
+                                Y = c("Size" ,"Kingdom", "Kingdom"),
+                                stringsAsFactors = FALSE)
+
+# Generate plots
+sA_plots <- lapply(seq(nrow(sA_features_pairs)), function(i){
+  pp <- ggplot2::ggplot(data = setA, ggplot2::aes_string(x = sA_features_pairs[i,1],
+                                                         y = sA_features_pairs[i,2],
+                                                         color = "Type")) +
+        ggplot2::geom_point(size = 3, alpha = 0.3)
+})
+# remove legends
+sA_legend <- get_legend(sA_plots[[1]]+ ggplot2::theme(legend.position = "right"))
+# Remove legend from plot
+sA_plots <- lapply(sA_plots,function(pp){pp + ggplot2::theme(legend.position = "none")})
+
+
+
+gridExtra::grid.arrange(grobs = append(sA_plots,list(sA_legend)),ncol=3)
+```
+
+Como puedes observar, las dimensiones que tengamos en cuenta afectan mucho a cómo se distribuyen los datos y, por ende, a cómo podríamos agruparlos.
+
+Entendiendo la importancia de esto, ten en cuenta los siguientes puntos a la hora de elegir algoritmo y/o preparar los datos:
+  
+  - **Te en cuenta el tipo de dato:** para el lenguaje R, no es lo mismo un número que una cadena de caracteres, un booleano o un factor (numérico finito y natural). Debes almacenar los datos en el formato más adecuado para su correcto procesamiento.
+  - **El significado del dato es importante:** los algoritmos _dan por hecho algunas cosas_, como que en una red ponderada de individuos, el valor de la relación es la _distancia_; cuando puede que tu estés almacenando la _similitud_. Obteniendo el resultado inverso al deseado.
+  - **Limpia tus datos:** dependiendo del algoritmo que escojas, los _missing values_ (NULL, NA, NaN, "") pueden afectar a la categorización. Valora si es adecuado eliminarlos o realizar una inferencia sobre estos individuos.
+  
+Por último, para que sigas jugando con las representaciones, te dejo un modelo 3D para que juegues con las perspectivas y veas como se modifican las nubes de puntos **(puedes agarrar y mover el gráfico)**:
+
+```{r plot3D_setA, echo = FALSE}
+rgl::plot3d(x = setA$Color, xlab = "Color",
+            y = setA$Size, ylab = "Size",
+            z = setA$Kingdom, zlab = "Kingdom",
+            type = 's',
+            radius = .1)
+rgl::rglwidget()
+```
+
+## **La relación**
+Otro factor importante es saber el tipo de **relaciones individuo-grupo**. En general, debes plantearte dos preguntas:
+
+  - ¿Los individuos pueden pertenecer a más de un grupo?:
+    - [Si] : Agrupación estricta
+    - [No] : Agrupación con superposición
+  - ¿Los individuos pueden NO pertenecer a un grupo?:
+    - [Si] : Agrupación con _outliers_
+    - [No] : Agrupación total (sin outliers)
+
+Es muy habitual la agrupación estricta, por su simplicidad de cálculo, pero puedes perder matices importantes para tu análisis. 
+
+Recuerda que si eliges hacer un cálculo con superposiciones, hay algoritmos que:
+  
+  1. Asignan un valor de pertenencia a varios grupos y, tras aplicar un corte, tienen en cuenta su posible pertenencia a varios grupos aunque el resto de miembros de cada grupo,  no tengan relación con las demás comunidades.
+  2. Otros realizan una agrupación jerárquica, de manera que cada individuo pertenece a un grupo y al resto de grupos parentales.
+
+```{r setB, echo = FALSE, eval = FALSE}
+cat("Dos ejemplos serían")
+data("USArrests")
+df <- scale(USArrests)
+res.km <- factoextra::eclust(df, "kmeans", nstart = 25)
+res.hc <- factoextra::eclust(df, "hclust")
+pp_dend <- factoextra::fviz_dend(res.hc, rect = TRUE) # dendrogam
+pp_cls <- factoextra::fviz_cluster(res.hc)
+```
+
+## **La estrategia**
+Una vez tienes los datos preparados y conoces el tipo de agrupamiento que quieres implementar, es el momento de elegir el algoritmo o la estrategia que quieres seguir para decidir qué individuo pertenece a qué grupo.
+
+Cada algoritmo utilizará una función que le indicará las distancias entre los elementos, para poder calcular los grupos de interés. 
+
+Vamos a pasar a un capítulo diferentes para explicar un **conjunto finito** de algoritmos, de manera que tengáis por donde empezar y comprendáis diferentes aproximaciones. La razón de pasar a otro capítulo es puramente estética, de manera que el apartado de "Algoritmos" sea visible en el primer nivel de la tabla de contenidos.
+
+# **Algoritmos**
+Los algoritmos que se presentan a continuación son sólo una muestra popular en la comunidad del clustering.
+
+Puede que otros algoritmos sean mejores para tu problema concreto, pero estos te servirán para tener una primera opción, así como entender ciertas estrategias que siguen algunos tipos de algoritmos.
+
+Para todos los algoritmos vamos a usar el mismo set de datos y veremos como cada uno da resultados diferentes:
+
+Vamos a comenzar descargando un set de datos online de [una web con múltiples datasets](http://cs.joensuu.fi/sipu/datasets/):
+```{r download_online}
+df <- read.csv("http://cs.joensuu.fi/sipu/datasets/Aggregation.txt", sep = "\t", header = FALSE)
+colnames(df) <- c("x","y","RealCluster")
+DT::datatable(df)
+ggplot2::ggplot(df, ggplot2::aes(x=x, y=y)) + ggplot2::geom_point()
+
+```
+
+Este set de datos nos permite visualizar claramente los posibles grupos (aunque esto no será siempre así). 
+
+### **K-means**
+Este algoritmo busca agrupar todos los individuos (sin outliers) en `k` grupos no solapantes.
+
+Para ello, el algoritmo selecciona un individuo que será el _centroide_, una función de distancia calculará qué individuo está más cerca de qué centroide, para asignarlo al grupo de ese centroide.
+
+Al principio, el algoritmo seleccionará los centroides de forma aleatoria, pero luego utilizará el promedio de cada grupo calculado para reajustar los centroides (de ahí el nombre `means` del algoritmo).
+
+Este algoritmo puede configurarse en varios puntos, pero principalmente vais a seleccionar el número de grupos (k) en los que queréis dividir el conjunto de datos y el máximo de iteraciones que debe realizar el algoritmo para intentar converger. Esto puede sonar algo subjetivo, pero puedes seguir ciertas estrategias para seleccionar más objetivamente la K de tu experimento.
+
+Para **ejectuar en R** este algoritmo, puedes usar la función `kmeans`. Aplicada a nuestro set de datos daría el siguiente resultado:
+```{r kmeans}
+kmeans <- kmeans(df, # Dataset 
+                 5, # K (number clusters)
+                 iter.max = 1000) # Maximum iters
+```
+Si graficamos el resultado obtenido:
+```{r kmeans_plot, echo = FALSE}
+df$ClusterKmeans <- kmeans$cluster
+ggplot2::ggplot() + 
+  ggplot2::geom_point(ggplot2::aes(x = x, y = y, color = ClusterKmeans), 
+                      data = df, size = 2) +
+  ggplot2::scale_colour_gradientn(colours=rainbow(4)) +
+  ggplot2::geom_point(ggplot2::aes(x = kmeans$centers[, 1], 
+                                   y = kmeans$centers[, 2]), 
+                                   color = 'black', size = 3) + 
+  ggplot2::ggtitle('Clusters k = 5 / K-means') + 
+  ggplot2::xlab('X') + ggplot2::ylab('Y')
+```
+
+Como podemos observar, el resultado es bastante correcto, aunque el algoritmo falla en clasificar individuos de los extremos de alguns agrupaciones ya que estarían más cerca de los centroides del otro grupo; aunque la densidad de puntos nos indica que no pertenecen a éste.
+
+Nosotros hemos elegido la `k=5` de forma arbitraria, pero podemos utilizar el **método del codo** para seleccionar una K más óptima.
+
+El método del codo consiste en calcular el _Within Clusters Summed Squares_ (WCSS) con un rango de posibles valores de K, para luego identificar el **punto donde cesan las variaciones significativas**. Para ello, podemos usar el siguiente código:
+```{r wcss_kmeans}
+maximum_K <- 20
+wcss <- sapply(seq(maximum_K), function(k){sum(kmeans(df, k)$withinss)})
+```
+Si los pintamos:
+```{r wcss_kmeans_plot, echo = FALSE}
+ggplot2::ggplot() + 
+  ggplot2::geom_point(ggplot2::aes(x = seq(maximum_K), y = wcss), color = 'blue') + 
+  ggplot2::geom_line(ggplot2::aes(x = seq(maximum_K), y = wcss), color = 'blue') + 
+  ggplot2::ggtitle("Método del Codo") + 
+  ggplot2::xlab('Cantidad de Centroides (k)') + 
+  ggplot2::ylab('WCSS')
+```
+
+Para este caso, observaríamos que unos posibles valores óptimos rondarían el 7, 8 o 9. Como queremos reducir el consumo de recursos computacionales, repetiremos el k-means con `k=7`
+
+```{r kmeans2_plot, echo = FALSE}
+kmeans7 <- kmeans(df,7,iter.max = 1000) 
+df$ClusterKmeans7 <- kmeans7$cluster
+ggplot2::ggplot() + 
+  ggplot2::geom_point(ggplot2::aes(x = x, y = y, color = ClusterKmeans7), 
+                      data = df, size = 2) +
+  ggplot2::scale_colour_gradientn(colours=rainbow(4)) +
+  ggplot2::geom_point(ggplot2::aes(x = kmeans7$centers[, 1], 
+                                   y = kmeans7$centers[, 2]), 
+                                   color = 'black', size = 3) + 
+  ggplot2::ggtitle('Clusters k = 7 / K-means') + 
+  ggplot2::xlab('X') + ggplot2::ylab('Y')
+```
+Como puedes observar, el resultado es más adecuado, aunque el que acierte con los 7 grupos reales, o no, depende de los primeros centroides que se escogen aleatoriamente.
+
+
+
+### **Agrupamiento jerárquico**
+Este algoritmo agrupa los individuos por su cercanía/similitud. Comienza calculando los pares más cercanos para crear un grupo, seguidamente irá identificando los siguietnes nodos más cercanos para crear grupos más grandes que se pueden mostrar como un dendograma. Dependiendo de cómo se usen los resultados de este algoritmo, estaríamos ante un algoritmo solapante (o estricto si sólo nos fijamos en un corte), sin outliers.
+
+Para usar este algoritmo debemos obtener las distancias entre los elementos y luego calcular el dendograma (agrupamiento). Un error típico en este punto, es contar con una variable que recoja la similitud de los elementos; esta columna tendrá valores mayores cuanto más se parezcan, mientras que esto puede ser identificado por el algoritmo de distancias, como que son dos individuos muy lejanos (lo inverso).
+
+Para ello, podemos usar el siguiente código:
+```{r hclust}
+distancesGraph <- dist(df[,c("x","y")], method = "euclidean")
+dendogram <- hclust(distancesGraph, method = "ward.D")
+```
+Si pintamos el resultado obtenido:
+```{r hclust_plot, echo=FALSE}
+ggdendro::ggdendrogram(dendogram, 
+                       rotate = FALSE, labels = FALSE, theme_dendro = TRUE) + 
+          ggplot2::labs(title = "Dendrograma")
+``` 
+Observamos que el dendograma muestra diferentes agrupamientos dependeiendo de la altura que fijemos. En este punto, debemos decidir dónde _cortar_ el arbol jerárquico para obtener las agrupaciones. Para ello usamos el método `cutree`.
+
+En nuestro caso, observando las agrupaciones mayores, identificamos unos posibles niveles de itnerés en 3, 6 y 7 grupos:
+```{r cutree_plot, echo = FALSE}
+cuts <- c(3,6,7)
+pps <- lapply(cuts, function(i){
+  cls <- cutree(dendogram, k = i)
+  df$cluster <- cls
+  ggplot2::ggplot() + 
+    ggplot2::geom_point(ggplot2::aes(x = x, y = y, color = cluster), 
+                        data = df, size = 2) +
+    ggplot2::scale_colour_gradientn(colours=rainbow(4)) +
+    ggplot2::ggtitle(paste0("k = ",i)) + 
+    ggplot2::theme(legend.position = "none")
+})
+gridExtra::grid.arrange(grobs=pps, ncol=3, title = "HClust clusters")
+```
+
+Como podemos observar, ofrece resultados razonables con una aproximación rápida a los resultados.
+
+
+
+### **DBSCAN**
+Los algoritmos de densidad se basan en identificar zonas de alta densidad de puntos para marcarlas como grupos. La virtud de estos algoritmos es que son capaces de:
+
+  - Identificar grupos de diferentes formas en un espacio.
+  - Pueden identificar outliers y obviarlos (eliminación de ruido).
+  
+Estos algoritmos serían del tipo estricto con outliers.
+
+Un representante clásico de estos algoritmos es el _Density-Based Clustering of Applications with Noise_ (DBScan). Este algoritmo estudia cada punto del espacio y evalua un radio alrededor de éste (EPS); si el número de puntos colindantes supera un mínimo marcado (MinPts), este punto será seleccionado como miembro de una agrupación; sino, será marcado como ruido y obviado en las agrupaciones.
+
+Si marcamos un mínimo de puntos vecinos de 5 y un radio de búsqueda de 2 (en base a los tamaños de nuestro espacio muestral); un posible código para usar este algoritmo sería:
+```{r dbscan}
+dbscan_cl <- fpc::dbscan(df[,c("x","y")], eps = 2, MinPts = 5)
+```
+Si lo pintamos:
+```{r dbscan_plot, echo = FALSE}
+df$ClusterDBScan <- dbscan_cl$cluster
+ggplot2::ggplot() + 
+  ggplot2::geom_point(ggplot2::aes(x = x, y = y, color = ClusterDBScan), 
+                      data = df, size = 2) +
+  ggplot2::scale_colour_gradientn(colours=rainbow(4)) +
+  ggplot2::geom_point(ggplot2::aes(x = dbscan_cl$centers[, 1], 
+                                   y = dbscan_cl$centers[, 2]), 
+                                   color = 'black', size = 3) + 
+  ggplot2::ggtitle('Clusters DBScan') + 
+  ggplot2::xlab('X') + ggplot2::ylab('Y')
+
+```
+Observamos que el algoritmo es capaz de identificar fácilmente todas las masas de puntos, aunque, en un escenario perfecto, no sería víctima de los _puentes_ entre zonas.
+
+
+### **Mean Shift**
+El algoritmo _Mean Shift_ se basan en la idea de que los datos se distribuyen en base a una _distribución probabilística_. Siguiendo esta premisa, calculan puntos de alta probabilidad (_kernels_; cuidado con el uso de esta palabra...) y, mediante iteraciones, identifican qué puntos de nuestros datos pertenecen a qué puntos de la distribución probabilística. Estos últimos se comportarán como los centroides vistos en el kmeans y servirán para asignar los individuos a los grupos.
+
+A diferencia del algoritmo k-means, Mean Shift no necesita que se le indique el número de grupos a generar, si no que los determinará mediante el uso de una función de _Kernel Density Estimation_ (KDE). Se pueden usar múltiples funciones para este paso y la que uséis dependerá de las que implemente el software que utilizéis. Una de las mśa famosas es la gaussiana, pero en nuestro caso vamos a usar alguna de las implementadas por el paquete meanShiftR.
+
+La peculiaridad de este paquete es que trabaja con matrices, así que tendremos que 
+```{r meanshift}
+Mdf <- as.matrix(df[,c("x","y")])
+ms <- meanShiftR::meanShift(queryData = Mdf,
+                            trainData = Mdf)
+```
+Si os fijáis, hemos dejado varios de los parámetros sin especificar (por defecto) y hemos estado obligados a dar dos parámetros:
+
+  - **queryData:** los datos que queremos clasificar en grupos.
+  - **trainData:** los datos que se utilizarán para calcular los puntos de la distribución con el KDE.
+  
+En nuestro caso, ambos sets de datos son el mismo y los resultados son los siguientes:
+```{r meanshift_plot, echo = FALSE}
+df$ClusterMS <- ms$assignment
+ggplot2::ggplot() + 
+  ggplot2::geom_point(ggplot2::aes(x = x, y = y, color = ClusterMS), 
+                      data = df, size = 2) +
+  ggplot2::scale_colour_gradientn(colours=rainbow(4)) +
+  ggplot2::geom_point(ggplot2::aes(x = ms$value[, 1], 
+                                   y = ms$value[, 2]), 
+                                   color = 'black', size = 3) + 
+  ggplot2::ggtitle('Clusters Mean Shift') + 
+  ggplot2::xlab('X') + ggplot2::ylab('Y')
+
+```
+Observando los resultados, es fácil ver que un algoritmo de Mean Shift es capaz de calcular varios puntos de alta probabilidad (negros) mediante su KDE, aunque estén próximos, y eso provoca que diferentes puntos de un mismo grupo real sean clasificados en clusters diferentes. Esto lo podemos observar en la media luna de la zona superior izqueirda y en el cúmulo de la zona baja central.
+
+Esto no significa que el Mean Shift nos vaya a dar resultados _peores_ que los demás, sólo que necesita de que ajustemos los valores del _entrenamiento_ y del _KDE_ para obtener un resultado muy exacto. Por contraposición, ofrece la capacidad de identificar pequeñas variaciones en grupos cercanos de puntos y clasificarlos como diferentes.
+
+Nota: es importante saber que el algoritmo Mean Shift es computacionalmente costoso O(n²); por lo que su tiempo de ejecución crecerá considerablemente para sets de datos grandes. En ese caso, es útil disponer de acceso a un clúster de computación como puede ser [Picasso](www.scbi.uma.es), que podéis usar por pertenecer a IBIMA.
