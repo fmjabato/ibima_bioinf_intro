@@ -1,0 +1,302 @@
+---
+title: "IBIMA - RMarkdown"
+author: "Fernando Moreno Jabato"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+# require(reticulate) # For python chunks
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **Introducción**
+Este documento ha sido creado para impartir docencia en el curso de bioinformática del Instituto de investigación Biomédica de Málaga (IBIMA) del 2021. En concreto, para el módulo de _RMarkdown_.
+
+La exactitud de este documento está sujeta al momento de su creación y está orientado a un nivel de iniciación, hasta medio, sobre la materia. Además, la granuralidad de explicación de los conceptos se ha adecuado para impartir una clase de 1 hora.
+
+Este documento se genera con licencia [creative commons CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+Pueden contactar conmigo mediante el correo jabato@uma.es para cualquier duda sobre los conceptos explicados, así como intereses en indagar más en la materia y/o aplicaciones en problemas reales de su campo.
+
+# **Markdown**
+Markdown es un _lenguaje de marcado ligero_. Esto quiere decir, que es un conjunto de órdenes que busca dar formato a algo (contenido de un documento, en este caso) y se centra en ser lo máslegible y poco intrusivo posible (ligero).
+
+Markdown es muy popular entre programadores y no programadores por su inclusión en herramientas muy importantes y editores web; también lo puedes usar una adaptación de Markdown en [Whatsapp](https://faq.whatsapp.com/general/chats/how-to-format-your-messages/?lang=es), por si no lo sabías.
+
+En esta unidad vamos a estudiar el uso de **RMarkdown**, que ,como ya se puede intuir, es una adaptación para utilizar código de R y de Markdwon generando documentos.
+
+## **Render**
+Antes de explicarte qué opciones de _renderizado_ tiene un documento de RMarkdown, necesito que entiendas qué es el proceso de `render`.
+
+**Renderizar** un documento consiste en darle a un motor de renderizado, las _instrucciones_ recogidas en el documento, para que el moto genere un elemento(s) **visual**. Es decir, todo el objetivo del proceso de _render_ es generar algo visual. 
+
+Esta interpretación es importante en programación ya que no es lo mismo `renderizar` que `compilar` o `interpretar`. Pero la comprensión de estos otros procesos escapa al objetivo de esta lección. 
+
+### **Tipos de documentos**
+Una vez entendido el concepto de `render`, podemos pasar a explicar los posibles documentos finales que es capaz de generar RMarkdown en la actualidad (2021). En este caso son:
+
+  1. **PDF:** perfecto para generar informes y compartirlos. No admite elementos dinámicos. 
+  2. **HTML:** puedes usarlos como el PDF e incluir elementos dinámicos e interactivos.
+  3. **Word:** genera un documento Word con las imágenes y tablas resultantes de tus chunks.
+  4. **beamer_presentation:** presentación en diapositivas formato PDF.
+  5. **ioslides_presentation:** presentación en diapositivas formato HTML.
+
+Cada uno tiene sus peculiaridades. Los más utilizados son el PDF y el HTML, ya que el Word no suele generar resultados satisfactorios en muchas de las situaciones.
+
+EL autor de este documento os recomienda usar el formato HTML. Aunque los usuarios están muy familiarizados con los PDFs, el formato HTML es igual de fácil de usar (lo lee cualquier navegador web) y permite incluir elementos dinámicos, así como cualquier código en HTML que quieras implementar.
+
+**IMPORTANTE:** exceptuando que tu quieras añadir elementos específicos, los tres formatos se generan desde el mismo documento, por lo que no tienes que saber programar en HTML ni ninguna otra cosa para poder renderizar hacia esos formatos.
+
+Si que es verdad, que en un nivel más avanzado, aprenderás que puedes incluir elementos HTML o LaTeX si vas a renderizar en HTML o PDF respectivamente.
+
+
+### **Configuración cabecera**
+La cabecera de un documento RMarkdown le dice al motor de renderizado ciertos elementos que debe incluir, así como configuraciones o incluso el formato final del fichero renderizado.
+
+Esta cabecera debe ser lo primero que aparezca en el documento y empieza y acaba con tres caracteres de guión `---`.
+
+Después, se añaden elementos usando pares `<Elemento> : <Valor>` e indentaciones si son configuraciones de un elemento padre.
+
+Hay múltiples elementos, pero yo os voy a explicar sólo los que considero esenciales:
+
+  - **title:** será el título del documento. No es obligatorio, pero si no lo ponéis, las versiones más nuevas de knitr lanzarán un warning.
+  - **author:** tampoco es obligatorio, pero el reconocimiento al autor es algo que debería estar más extendido.
+  - **output:** es el tipo de documento que se quiere generar, puede ser `HTML`, `PDF` o `Word`. Además, puedes añadirle más configuraciones a este tipo:
+    - **toc:** esto indica que quieres crear un índice (Table Of Contents).
+    - **toc_float:** esto le indica, si es un HTML, que quieres que el índice _flote_ según navegas por el documento.
+    - **df_print:** esto le indica a DT (del que hablaremos en los chunks) que quieres que las tablas sean paginadas (en vez de ocupar kilómetros dentro del documento)
+    
+Si te diriges a la cabecera de este documento, verás que es la siguiente:
+```
+---
+title: "IBIMA - RMarkdown"
+author: "Fernando Moreno Jabato"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+```
+
+Podéis indagar sobre más características de las cabeceras RMarkdown, aunque estos elementos son los mśa utilizados junto con `date` que os será de utilidad si necesitáis saber la fecha de creación.
+
+**Importante:** las cabeceras no son obligatorias, de hecho, esta información se puede pasar por parámetros a la hora de lanzar el render. Y también es útil no incluirla cuando modularizéis documentos Rmd, cosa que comentaré en la sección de _Avanzado_.
+
+### **Lanzamienton render**
+La mayoría de los usuarios compilan sus RMarkdown desde interfaces de usuario como la de RStudio. 
+
+Si este es tu caso, sólo tendrías que pulsar el botón `knit` que verás en la barra de herramientas superior (debajo del nombre de fichero).
+
+Al pulsar este botón, realmente estás llamando al comando que compila el markdwon desde R. Este comando es útil conocerlo, ya que será el que debas ejecutar si quieres incluir la generación automática de informes al finalizar ana función/script propio.
+
+El comando en cuestión es:
+```
+rmarkdown::render(input = <RMDFile>,
+                  output_file = <OutputFileName>)
+```
+A este parámetro se le puede añadir información sobre el tipo de fichero de salida, entre otros. Mi recomendación es que este tipo de información la incluyáis (si tiene sentido en vuestro pipeline) directamente en la cabecera del fichero Rmd, para facilitar su reproducibilidad.
+
+De esta manera, este mismo documento se genera ejecutando el comando:
+```
+rmarkdown::render("ibima_markdown.Rmd",output_file = "ibima_markdown.html")
+```
+
+## **Elementos**
+Vamos a hacer un repaso a los elementos de marcado rápido más habituales de Markdown. **Importante:** ahora vamos a centrarnos en los elementos de markdown, pero echarás en falta algunas cosas como los gráficos, que están explicados en el apartado de _Chunks_.
+
+### **Negrita e itálica**
+En Markdown es muy fácil usar la **negrita** y la _itálica_. Para ello, sólo hay que añadir (al principio y al final) los siguientes caracteres:
+
+  - Negrita : (2x) asterisco [ \*\* ] 
+  - Itálica : guión bajo [ \_ ]. 
+  
+Nota: la itálica también se puede conseguir con un sólo asterisco, pero esto puede generar dudas con respecto a la negrita, por lo que te recomiendo que uses el guión bajo
+
+# **Títulos y subtítulos**
+La creación de títulos y subtítulos es muys simple en Markdown, para ello, sólo tienes que usar el caracter almoadilla (\#) tantas veces como el nivel que quieras. Por ejemplo, un título usará un sólo caracter (\#), un subtítulo usará dos (\#\#), un subsubtítulo usará tres (\#\#\#) y así sucesivamente.
+
+Lo más útil de los títulos, es que el `toc` (índice) se crea automáticamente.
+
+### **Enlaces**
+Los enlaces sirven para referenciar URLs. La nomenclatura es `[<TextoVisible>](<URL>)`. Por ejemplo, [aquí](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf) te dejo un enlace a una cheatsheet de RMarkdown.
+
+### **Imágenes y gráficos**
+En este apartado debemos distinguir entre dos tipos de imágenes: 
+  1. Las imágenes que ya tenemos almacenadas en un fichero. 
+  2. Las que vamos a generar con datos a través de R.
+
+Para las primeras, debemos utilizar la siguiente sintaxis `![<Texto>](<pathToFile>)`, donde `<texto>` es opcional y `<pathToFile>` debe ser la localización del fichero de imagen. Si te dijas, la nomenclatura es la misma que los _enlaces_ pero incluyendo una exclamación al principio.
+
+En el caso de los gráficos generados al momento, se incluirán en el documento como resultado de la ejecución de un _chunk_. Puedes ver más sobre esto en el siguiente capítulo.
+
+### **Listas**
+Las listas en Markdown son muy simples de generar. Para ellos, sólo necesitamos:
+  
+  1. Dejar una linea en blanco entre el párrafo anterior y el primer elemento de la lista.
+  2. Añadir los elementos de la lista usando el caracter especial de listas (se explica después).
+  3. (Se recomienda) dejar otra línea en blanco entre la lista y el siguiente párrafo.
+  
+Dependiendo del tipo de lista que se desee, hay que usar un _caractér especial de listas_ diferente:
+  - Listas ordenadas: para esto, debeos comenzar el elemento con un `número` seguido de un `punto` y un `espacio`.
+  - Listas sin orden: para esto, basta con usar uno de los siguientes elementos:
+    - Guión (-)
+    - Suma (+)
+    - Asterisco (\*)
+    
+Estos tipos de listas se pueden mezclar. Así mismo, se pueden anidar las listas para hacer sublistas. Ejemplo:
+```
+  1. Elemento A
+  2. Elemento B
+    - Subelemento B1
+    - Subelemento B2
+```
+
+### **Código y chunks**
+Llega el momento del formato código. Markdown te permite darle un formato diferenciador a palabras o fragmentos de código, lo cual **no significa que se vaya a ejecutar**. Para que lo ejecute, tienes que indicarle a RMarkdown que ese trozo de código es ejecutable. Pero eso lo veremos más adelante.
+
+Ahora has de entender que hay dos tipos de marcado de código:
+
+  - **Código inline:** este renderiza el `formato` especial en la propia línea donde esté, como puedes ver en la palabra "formato" anterior. Esto es útil para palabras sueltas o fragmentos de pocas palabras. Para usarlo, rodeamos el código con el caracter especial _asterisco inverso_ ( \` ).
+  - **Fragmento de código:** para este caso, Markdown entiende que vas a utilizar un fragmento más largo, que pueden ser varias lineas. Para usarlo, debes comenzar y acabar usando tres veces (x3) el mismo _asterisco inverso_ que usamos para el código inline. Un ejemplo de esto lo puedes ver en el ejemplo de listas del apartado anterior.
+
+### **Otros**
+Otro elemento muy útil es la tabla, pero estando en RMarkdown, te recomendamos que uses las funciones de graficado de tabla de R que explicaremos en los chunks.
+
+Hay múltiples elementos de Markdown que no hemos explicado. Puedes indagar en internet y aquí te dejo una pequeña [cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf) de RMarkdown.
+
+# **Chunks**
+Los chunks son fragmentos de código que **se pueden ejecutar**. De hecho, se especifican con la misma nomenclatura que los códigos que ya hemos explicado (inline y fragmentos), más una información que le indica a RMarkdown que puede ejecutarlo.
+
+En concreto, lo único que hay que indicarle a RMarkdown para que ejecute el fragmento es el _lenguaje_ que se ha usado en ese fragmento de código. Y si, hemos dicho lenguaje porque no tiene por qué ser sólo R. De hecho, aquí tienes dos ejemplos:
+```{r r_chunk}
+lan <- "R"
+print(paste("Esto es un chunk escrito en:",lan))
+```
+```{python python_chunk}
+lan = "Python"
+print("Esto es un chunk escrito en: " + lan)
+```
+
+Si te fijas, el resultado de la ejecución del código se muestra a continuación de éste. Luego veremos cómo configurar renderizados que oculten el código y dejen sólo el resultado, entre otros.
+
+Lo importante ahora es que entiendas que puedes ejecutar cosas de, por ejemplo, python en RMarkdown y para ello debemos hacer lo siguiente:
+
+  - Debemos especifcar después del caracter especial de código (en cualquiera de sus formas) es el lenguaje que codifica el código. Un ejemplo es: La suma de 2+2 es `r 2+2`, donde hemos introducido un código inline con "r 2+2" sustituyendo (") por (`) que ha generado el 4.
+
+Se pueden especificar más opciones, a parte del lenguaje de codificación, pero eso lo veremos más adelante.
+
+En el caso de un bloque de código más largo, haremos lo mismo pero usando la triple tilde inversa.
+
+
+## **Configuración de un chunk**
+Ahora vamos a introducir más información de configuración del chunk. Para ello, en vez de introducir el lenguaje (únicamente) después de la tilde inversa, vamos a pasarle un conjunto de opciones recogido entre llaves ({}).
+
+El conjunto seguirá empezando por el lenguaje de codificación. A continuación podemos añadir alguno de estos valores usando la nomenclatura `<propiedad> = <valor>`:
+
+  - `echo`: indica si mostras, o no, el código. Valor por defecto: `TRUE`.
+  - `eval`: indica si el código debe ser ejecutado, o no. Valor por defecto: `TRUE`.
+  - `warning`: indica si mostrar, o no, los mensajes de warning. Valor por defecto: `TRUE`.
+  - `error`: indica si mostrar, o no, los mensajes de error. Valor por defecto: `FALSE`.
+
+Hay muchos más, pero con estos podéis empezar a configurar la mayoría de vuestros escenarios.
+
+Un ejemplo de chunk configurado sería ` {r echo = FALSE} ` que no mostrará el código ejecutado.
+
+**Importante:** también puedes darle nombre a los chunks con configuración (entre llaves) especificámdolo (sin espacios) después del lenguaje, ejemplo: ` {r chunk_name} `. Esto es una buena costumbre para identificar posibles fallos en la renderización del documento, ya que estos nombre se ven reflejados en los mensajes que lanza el motor de rendering.
+
+## **Tablas**
+RMarkdown tiene la capacidad de renderizar cualquier tabla/matriz de forma predeterminada simplemente llamando a la variable que contiene los datos. Por ejemplos:
+```{r table_example}
+example <- data.frame(A = seq(1,15),
+                      B = seq(16,30),
+                      C = c(rep("Hola",7),rep("Adios",8)))
+
+example
+```
+Como verás, la tabla se muestra paginada, esto se debe a que, en la cabecera de este documento, hemos añadido el comando `df_print: TRUE`. Si estás atento, verás que el comando incluye la palabra `df` que significa _Data Frame_. Si en vez de pintar un dataframe, pintamos una matriz, no contaremos con esta posibilida de paginar la información:
+```{r table_example2}
+as.matrix(example)
+```
+**Nota:** En este caso, la matriz es pequeña, pero si fuese _gigante_ tendríamos kilómetros de información en este documento. Tened cuidado a la hora de decidir cómo mostrar la información.
+
+La versión por defecto para renderizar las tablas es correcta, pero el autor del documento os recomienda usar (en el caso de sets de datos más grandes) paquetes que añadan funcionalidades a estas tablas. Un ejemplo es el paquete **DT**.
+
+Este paquete te permite añadir funcionalidades a la tabla como:
+
+  - Ordenación interactiva de la posición de las columnas y el orden de las filas.
+  - Filtrado dinámico de los individuos por valores en las columnas.
+  - Descarga (formato excel, plano, ...) de los datos incluidos en la tabla.
+
+Entre otros. Un ejemplo de mostrar esta misma tabla con DT con un filtrado de valores por columna dinámico, sería el siguiente:
+```{r dt}
+DT::datatable(example,
+              filter = "top") # Incluye filtros en la parte superior
+```
+
+## **Gráficos**
+En el caso de RMarkdown, renderizar un gráfico es tan simple como renderizar una tabla. Sólo necesitas llamar la función que genera el gráfico o a la variable que contiene el gráfico ya generado. Un ejemplo es el siguiente:
+```{r render_plot_fake, eval = FALSE}
+ggplot2::ggplot(df, ggplot2::aes(x=x, y=y)) + ggplot2::geom_point()
+```
+```{r render_plot, echo = FALSE}
+df <- read.csv("http://cs.joensuu.fi/sipu/datasets/Aggregation.txt", sep = "\t", header = FALSE)
+colnames(df) <- c("x","y","RealCluster")
+ggplot2::ggplot(df, ggplot2::aes(x=x, y=y)) + ggplot2::geom_point()
+```
+
+# **Avanzado**
+Ya tenéis los conocimientos necesarios para hacer vuestros primeros doscumentos de RMarkdown. 
+
+Os quiero dejar un par de _conceptos chulos_ para que hagáis cosas más avanzadas en el futuro.
+
+El contenido que vais a ver a continuación no va a explicar todos los detalles de lo que se ejecuta, para eso podéis indagar o contactarme en el correo especificado al principio.
+
+Os **recomiendo** que miréis esta sección usando el código fuente (Rmd) y el documento renderizado.
+
+## **Uso de variables**
+El renderizado de un documento RMarkdown se comporta como cualquier función de R, de manera que tiene acceso a todos los _Environment_ parentales.
+
+Esto significa que, si has renderizado este documento llamándolo con variables cargadas en el environment desde el que lo llamas, **vas a tener acceso a variables que no necesariamente están inicializadas dentro del documento**.
+
+Esto es especialmente útil si añades la opción de generar un informe al final de un script/función propia. De esta manera, no tienes que generar los datos en los chunks del documento, si no que puedes dedicarte a graficar/representar los datos que ya estén en las variables del entorno donde ya has calculado todos tus resultados.
+
+## **Añadiendo código dinámicamente**
+Puedes añadir código Markdown de forma dinámica usando `cat`, de esta manera, puedes presentar una parte del documento de forma diferente, en base a valores que ya tengas calculados.
+
+Esto se entiende mejor de esta manera:
+```{r dinamic_code, results='asis'}
+have_results <- FALSE
+output <- c("El siguiente párrafo está añadido desde un chunk de R:")
+if(have_results){
+  output <- c(output,"\n\n- Tengo resultados")
+}else{
+  output <- c(output,"\n\n- No tengo resultados")
+}
+cat(paste(output,collapse="\n"))
+```
+
+**(Esto ya no lo ha generado el chunk)**. Si te fijas, puedes jugar con el valor de la variable `have_results` y obtener un texto (integrado en el Markdown) diferente. Pudiendo incluso no mostrar nada. Con esto puedes añadir, o no, secciones, ya que puedes añadir elementos markdown como títulos (\#) o listas, como ya hemos hecho en el ejemplo.
+
+**Recomendación:** prueba a cambiar el valor de have_results y observar tu mismo los cambios.
+
+**Tentación diabólica:** si haces una abstracción un poco drástica, es posible añadir chunks de código de forma dinámica e un RMarkdown. Esta funcionalidad es muy útil con sets de resultados con múltiples análisis, como análisis sobre diferentes clusters. Pero no te voy a engañar, en este punto, si no te manejas bien organizando tu código, vas a encontrar dragones. De todos modos, si quieres indagar, se hace con `knitr::knit`
+
+## **Modularización de markdowns**
+Es posible cargar el código de otro documento RMarkdown desde un fichero externo y renderizarlo junto a este. a efectos prácticos, es como si copiaras y pegaras ese documento dentro del tuyo. 
+
+Esto es muy útil si, un informe tuyo, contiene N secciones que, cada una, tienen una longitud importante. Puedes hacer N ficheros Rmd con el código para generar cada sección y luego llamarlos desde un Rmd principal usando los siguientes comandos:
+```
+aux <- knitr::knit_expand("<PathToRMDFile")
+
+# Copy the following line as an inline chunk in your RMarkdwon
+`paste(knitr:knit(text = aux), collapse="\n")`
+
+# See that line above include (`), it means that it's not code for this chunk, it's an inline code that must be moved out of this chunk
+```
+
+Nota que, en el chunk anterior, se incluye una línea que debe ser extraida del chunk e incluida como un chunk inline (de ahí las tildes inversas) directamente en tu RMarkdown.
